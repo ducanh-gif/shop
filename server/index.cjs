@@ -7,8 +7,33 @@ const zalopayConfig = require("./zalopay.config.cjs");
 const app = express();
 const PORT = 3001;
 
-// Middleware
-app.use(cors());                              // Cho phép frontend gọi
+const allowedOrigins = [
+  "https://demoshop1001.onrender.com", // Your production frontend
+  "http://localhost:5173"               // Your local development frontend
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, or postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true, // Crucial if your frontend sends cookies or tokens
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+// 1. Apply CORS middleware BEFORE any routes
+app.use(cors(corsOptions));
+
+// 2. Handle preflight (OPTIONS) requests explicitly
+app.options("*", cors(corsOptions));                              // Cho phép frontend gọi
 app.use(express.json());                      // Parse JSON body
 app.use(express.urlencoded({ extended: true })); // Parse form data
 const path = require("path");
