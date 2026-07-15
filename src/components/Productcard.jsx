@@ -1,16 +1,13 @@
 import React from 'react';
-import { ShoppingCart, Heart } from 'lucide-react'; // ✅ Import thêm icon Heart
-import { useNavigate } from 'react-router-dom'; // ✅ Import useNavigate để chuyển trang
+import { ShoppingCart } from 'lucide-react'; 
 import { useAuth } from "../context/AuthContext";
-import { fetchCart, updateCart, fetchWishlist, updateWishlist } from "../firebase/productService"; // ✅ Import thêm hàm xử lý Wishlist từ Service của bạn
+import { fetchCart, updateCart } from "../firebase/productService";
 
-const ProductCard = ({ id, name, description, price, tag, image, isWishlisted = false }) => {
+const ProductCard = ({ id, name, description, price, tag, image }) => {
   const { user } = useAuth();
-  const navigate = useNavigate(); // ✅ Khởi tạo hook chuyển trang
 
-  // 1. Logic xử lý Thêm vào giỏ hàng (Giữ nguyên của bạn)
   const handleAddToCart = async (e) => {
-    e.stopPropagation(); 
+    e.stopPropagation(); // Chặn nổi bọt chuyển trang
     e.preventDefault();
     if (!user?.uid) {
       alert("Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng!");
@@ -35,43 +32,12 @@ const ProductCard = ({ id, name, description, price, tag, image, isWishlisted = 
       } else {
         updatedItems = [...cartItems, { productId: id, quantity: 1 }];
       }
-      
+      console.log("Updated Cart Items:", updatedItems);
       await updateCart(user.uid, updatedItems);
       alert(`Đã thêm "${name}" vào giỏ hàng!`);
+
     } catch (error) {
       console.error("Lỗi thêm vào giỏ hàng:", error);
-    }
-  };
-
-  // 2. 🔥 LOGIC MỚI: Thêm vào danh sách yêu thích & Chuyển sang trang Wishlist
-  const handleAddToWishlist = async (e) => {
-    e.stopPropagation(); // Chặn hành động click vào thẻ card chuyển sang trang chi tiết
-    e.preventDefault();
-
-    if (!user?.uid) {
-      alert("Vui lòng đăng nhập để thêm sản phẩm vào danh sách yêu thích!");
-      return;
-    }
-
-    try {
-      // Gọi API lấy danh sách yêu thích hiện tại từ Firebase (tương tự như giỏ hàng)
-      const currentWishlist = await fetchWishlist(user.uid) || [];
-      let wishlistItems = Array.isArray(currentWishlist) ? currentWishlist : [currentWishlist];
-
-      // Kiểm tra xem sản phẩm đã nằm trong Wishlist chưa
-      const isExist = wishlistItems.some(item => String(item.productId) === String(id));
-
-      if (!isExist) {
-        // Nếu chưa có thì đẩy ID sản phẩm mới vào
-        const updatedWishlist = [...wishlistItems, { productId: id }];
-        await updateWishlist(user.uid, updatedWishlist);
-      }
-
-      // Sau khi thêm thành công, chuyển hướng người dùng ngay lập tức sang trang Wishlist
-      navigate("/wishlist");
-
-    } catch (error) {
-      console.error("Lỗi khi thêm vào danh sách yêu thích:", error);
     }
   };
 
@@ -84,20 +50,6 @@ const ProductCard = ({ id, name, description, price, tag, image, isWishlisted = 
           alt={name}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
         />
-
-        {/* 💖 NÚT TRÁI TIM YÊU THÍCH (Nằm ở góc trái trên cùng của ảnh) */}
-        <button 
-          onClick={handleAddToWishlist}
-          className="absolute top-3 left-3 bg-white/90 hover:bg-white text-gray-400 hover:text-red-500 hover:scale-110 active:scale-95 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-md z-50"
-          title="Thêm vào danh sách yêu thích"
-        >
-          <Heart 
-            className={`w-4 h-4 transition-colors duration-200 ${
-              isWishlisted ? "fill-red-500 text-red-500" : "text-gray-400 hover:text-red-500"
-            }`} 
-          />
-        </button>
-
         {tag && (
           <span className="absolute top-3 right-3 bg-emerald-700 text-white text-[10px] font-bold uppercase px-2 py-1 rounded group-hover:bg-emerald-600 transition-colors duration-200">
             {tag}
@@ -113,6 +65,7 @@ const ProductCard = ({ id, name, description, price, tag, image, isWishlisted = 
         <p className="text-xs text-gray-400 mb-4">{description}</p>
         
         <div className="flex items-center justify-between">
+          {/* 💰 ĐÃ SỬA: Chuyển đổi hiển thị hoàn toàn sang định dạng VND */}
           <span className="text-lg font-bold text-gray-800">
             {price ? price.toLocaleString('vi-VN') : "0"} đ
           </span>
