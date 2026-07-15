@@ -2,7 +2,7 @@ import React from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
-import ProductCard from '../../components/ProductCard';
+import ProductCard from '../../components/Productcard';
 import SidebarFilters from '../../components/SidebarFilters';
 import useProducts from '../../hooks/useProducts';
 
