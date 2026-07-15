@@ -33,7 +33,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // 2. Handle preflight (OPTIONS) requests explicitly
-app.options("*", cors(corsOptions));                              // Cho phép frontend gọi
+app.options("{*splat}", cors(corsOptions));                            // Cho phép frontend gọi
 app.use(express.json());                      // Parse JSON body
 app.use(express.urlencoded({ extended: true })); // Parse form data
 const path = require("path");
