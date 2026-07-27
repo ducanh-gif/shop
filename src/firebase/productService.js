@@ -84,3 +84,33 @@ export const updateCart = async (userId, items) => {
         throw error;
     }
 };
+
+
+export const fetchWishlist = async (userId) => {
+    try {
+        if (!userId) return [];
+        const wishlistDocRef = doc(db, "wishlists", userId);
+        const docSnap = await getDoc(wishlistDocRef);
+        
+        if (docSnap.exists() && docSnap.data().wishlist) {
+            return docSnap.data().wishlist; 
+        }
+        return []; 
+    } catch (error) {
+        console.error("Error fetching wishlist:", error);
+        throw error;
+    }
+};
+
+// 2. Cập nhật hoặc thêm mới danh sách Wishlist của User trên Firestore
+export const updateWishlist = async (userId, items) => {
+    try {
+        if (!userId) return;
+        const wishlistDocRef = doc(db, "wishlists", userId);
+        console.log("Updating wishlist for user:", userId, "with items:", items);
+        return await setDoc(wishlistDocRef, { wishlist: items }, { merge: true });
+    } catch (error) {
+        console.error("Error updating wishlist:", error);
+        throw error;
+    }
+};
