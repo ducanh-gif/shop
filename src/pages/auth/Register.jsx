@@ -1,202 +1,82 @@
 /**
  * ============================================================
  * Page: Register - Trang Đăng Ký Tài Khoản
- * ============================================================
- *
- * Mục đích:
- *   - Cho phép user tạo tài khoản mới bằng 2 phương thức:
- *     1. Email + Password (điền form đầy đủ)
- *     2. Google Account (đăng ký nhanh 1 click)
- *   - Thu thập: username, email, password (cho phương thức email).
- *   - Xác thực qua Firebase Authentication.
- *   - Sau khi đăng ký thành công → redirect về /dashboard.
- *
- * Route: /register (được bảo vệ bởi GuestRoute - chỉ guest truy cập)
- *
- * Luồng hoạt động (Email/Password):
- *   1. User nhập username + email + password.
- *   2. Bấm "Đăng Ký" → handleSubmit() được gọi.
- *   3. Validate dữ liệu đầu vào (kiểm tra trống, password ≥ 6 ký tự).
- *   4. Gọi register(username, email, password) từ AuthContext.
- *      → Firebase tạo account + updateProfile() gắn displayName.
- *   5. Thành công → navigate("/dashboard")
- *   6. Thất bại → hiển thị lỗi.
- *
- * Luồng hoạt động (Google):
- *   1. User bấm "Đăng ký bằng Google".
- *   2. handleGoogleRegister() được gọi.
- *   3. Gọi loginWithGoogle() từ AuthContext.
- *      → Popup Google mở → user chọn tài khoản.
- *      → Firebase TỰ ĐỘNG tạo tài khoản nếu lần đầu.
- *   4. Thành công → navigate("/dashboard")
- *   5. User đóng popup → không làm gì.
- *   6. Lỗi → hiển thị thông báo.
- *
- * LƯU Ý VỀ GOOGLE SIGN-IN:
- *   - Dùng CÙNG hàm loginWithGoogle() cho cả Login và Register.
- *   - Vì signInWithPopup() của Firebase TỰ ĐỘNG xử lý:
- *     + Nếu email chưa có → TẠO tài khoản mới (register)
- *     + Nếu email đã có  → ĐĂNG NHẬP tài khoản cũ (login)
- *   - Nên không cần hàm "registerWithGoogle" riêng!
+ * Theme: NutriHealth (Xanh lá cây tươi mát & Sức khỏe)
  * ============================================================
  */
 
 import { useState } from "react";
-// useNavigate: Điều hướng bằng code sau khi đăng ký thành công
-// Link: Thay thế thẻ <a>, chuyển trang mà không reload (SPA)
 import { useNavigate, Link } from "react-router-dom";
-// useAuth: Lấy hàm register() và loginWithGoogle() từ AuthContext
 import { useAuth } from "../../context/AuthContext";
-// AuthLayout: Layout chung cho các trang auth (Login, Register)
 import AuthLayout from "../../layouts/AuthLayout";
 
 export default function Register() {
     // ══════════════════════════════════════════
     // HOOKS
     // ══════════════════════════════════════════
-
-    // ── Lấy các hàm authentication từ AuthContext ──
-    // register:        Đăng ký bằng email/password + username
-    // loginWithGoogle: Đăng ký/đăng nhập bằng Google (cùng 1 hàm)
     const { register, loginWithGoogle } = useAuth();
-
-    // ── Function điều hướng ──
     const navigate = useNavigate();
 
     // ══════════════════════════════════════════
     // STATE
     // ══════════════════════════════════════════
-
-    // ── State: Dữ liệu form ──
-    // Object chứa 3 field, dùng computed property name để cập nhật
     const [form, setForm] = useState({
-        username: "",   // Tên hiển thị (sẽ được gắn vào displayName qua updateProfile)
-        email: "",      // Email đăng ký (phải chưa được sử dụng)
-        password: "",   // Mật khẩu (Firebase yêu cầu tối thiểu 6 ký tự)
+        username: "",
+        email: "",
+        password: "",
     });
 
-    // ── State: Thông báo lỗi ──
-    // Rỗng = không có lỗi, có giá trị = hiển thị alert đỏ
     const [error, setError] = useState("");
-
-    // ── State: Trạng thái đang xử lý form (email/password) ──
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    // ── State: Trạng thái đang xử lý Google Sign-In ──
-    // Tách riêng để 2 nút hoạt động độc lập (UX tốt hơn)
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
     // ══════════════════════════════════════════
     // EVENT HANDLERS
     // ══════════════════════════════════════════
-
-    /**
-     * handleChange - Cập nhật state khi user gõ vào input
-     *
-     * Dùng computed property name: [e.target.name] để cập nhật đúng field.
-     * Ví dụ: input name="username" gõ "Nguyễn Văn A"
-     *   → setForm({ ...form, username: "Nguyễn Văn A" })
-     *
-     * @param {Event} e - Sự kiện onChange từ input
-     */
     const handleChange = (e) => {
         setForm({
             ...form,
             [e.target.name]: e.target.value,
         });
-        // Xóa lỗi cũ khi user gõ lại
         if (error) setError("");
     };
 
-    /**
-     * handleSubmit - Xử lý đăng ký bằng email/password
-     *
-     * Async vì register() gọi Firebase API (network request):
-     *   - createUserWithEmailAndPassword() → Tạo account
-     *   - updateProfile() → Gắn displayName
-     *
-     * Validate chi tiết:
-     *   - Kiểm tra tất cả field không trống
-     *   - Password >= 6 ký tự (Firebase requirement)
-     *
-     * @param {Event} e - Sự kiện onSubmit từ form
-     */
     const handleSubmit = async (e) => {
-        // Ngăn form reload trang
         e.preventDefault();
 
-        // ── Validate ──
         if (!form.username || !form.email || !form.password) {
             setError("Vui lòng nhập đầy đủ thông tin!");
             return;
         }
 
-        // ── Validate password length ──
-        // Firebase yêu cầu password tối thiểu 6 ký tự
-        // Kiểm tra trước ở client để UX tốt hơn (không cần đợi server trả lỗi)
         if (form.password.length < 6) {
             setError("Mật khẩu phải có ít nhất 6 ký tự!");
             return;
         }
 
-        // ── Bật loading ──
         setIsSubmitting(true);
-
-        // ── Gọi hàm register từ AuthContext ──
-        // register() thực hiện 2 bước:
-        //   1. createUserWithEmailAndPassword(auth, email, password) → Tạo account
-        //   2. updateProfile(user, { displayName: username }) → Gắn tên
         const result = await register(form.username, form.email, form.password);
-
-        // ── Tắt loading ──
         setIsSubmitting(false);
 
-        // ── Xử lý kết quả ──
         if (result.error) {
-            // Đăng ký thất bại → Hiển thị lỗi (email trùng, password yếu...)
             setError(result.error);
         } else {
-            // Đăng ký thành công → Chuyển đến Dashboard
-            // Lưu ý: Firebase TỰ ĐỘNG đăng nhập user sau khi tạo account
-            // → onAuthStateChanged sẽ cập nhật state user
             navigate("/home");
         }
     };
 
-    /**
-     * handleGoogleRegister - Xử lý đăng ký bằng Google
-     *
-     * Gọi CÙNG hàm loginWithGoogle() với trang Login.
-     * Firebase signInWithPopup() tự xử lý:
-     *   - Email chưa có trên Firebase → Tạo tài khoản MỚI (register)
-     *   - Email đã có trên Firebase  → Đăng nhập tài khoản CŨ (login)
-     *
-     * Ưu điểm của đăng ký bằng Google:
-     *   - User KHÔNG cần nhớ password
-     *   - displayName, email, photoURL được lấy TỰ ĐỘNG từ Google
-     *   - KHÔNG cần validate hay kiểm tra gì
-     *   - Nhanh hơn (chỉ 1-2 click)
-     */
     const handleGoogleRegister = async () => {
-        // ── Bật loading cho nút Google ──
         setIsGoogleLoading(true);
         setError("");
 
-        // ── Gọi loginWithGoogle() từ AuthContext ──
-        // Mở popup Google → user chọn tài khoản → Firebase xác thực
         const result = await loginWithGoogle();
-
-        // ── Tắt loading ──
         setIsGoogleLoading(false);
 
-        // ── Xử lý kết quả ──
         if (result.error) {
-            // Có lỗi → Hiển thị thông báo
             setError(result.error);
         } else if (result.cancelled) {
-            // User đóng popup → Không làm gì (hành động có chủ đích)
+            // Do nothing if user closed the popup
         } else {
-            // Đăng ký/Đăng nhập Google thành công → Chuyển đến Dashboard
             navigate("/home");
         }
     };
@@ -204,28 +84,31 @@ export default function Register() {
     // ══════════════════════════════════════════
     // RENDER
     // ══════════════════════════════════════════
-
     return (
-        <AuthLayout title="Đăng Ký">
+        <AuthLayout title="Tạo Tài Khoản NutriHealth">
             {/* ── Form đăng ký bằng email/password ── */}
             <form
                 onSubmit={handleSubmit}
                 style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: "1rem",
+                    gap: "1.2rem",
                 }}
             >
-                {/* Thông báo lỗi - hiển thị trong box đỏ nhạt */}
+                {/* Thông báo lỗi */}
                 {error && (
                     <div
                         style={{
                             color: "#dc2626",
-                            fontSize: "14px",
-                            padding: "0.5rem 0.75rem",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            padding: "0.6rem 0.8rem",
                             backgroundColor: "#fef2f2",
-                            borderRadius: "6px",
+                            borderRadius: "8px",
                             border: "1px solid #fecaca",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.4rem",
                         }}
                     >
                         ⚠️ {error}
@@ -237,11 +120,13 @@ export default function Register() {
                     <label
                         style={{
                             display: "block",
-                            marginBottom: "0.5rem",
-                            fontWeight: "500",
+                            marginBottom: "0.4rem",
+                            fontWeight: "600",
+                            color: "#374151",
+                            fontSize: "14px",
                         }}
                     >
-                        Tên người dùng
+                        Tên hiển thị
                     </label>
                     <input
                         type="text"
@@ -251,9 +136,21 @@ export default function Register() {
                         placeholder="Nguyễn Văn A"
                         style={{
                             width: "100%",
-                            padding: "0.75rem",
-                            borderRadius: "4px",
+                            padding: "0.75rem 0.9rem",
+                            borderRadius: "8px",
                             border: "1px solid #d1d5db",
+                            fontSize: "14px",
+                            outline: "none",
+                            boxSizing: "border-box",
+                            transition: "all 0.2s ease",
+                        }}
+                        onFocus={(e) => {
+                            e.target.style.borderColor = "#059669";
+                            e.target.style.boxShadow = "0 0 0 3px rgba(5, 150, 105, 0.15)";
+                        }}
+                        onBlur={(e) => {
+                            e.target.style.borderColor = "#d1d5db";
+                            e.target.style.boxShadow = "none";
                         }}
                     />
                 </div>
@@ -263,8 +160,10 @@ export default function Register() {
                     <label
                         style={{
                             display: "block",
-                            marginBottom: "0.5rem",
-                            fontWeight: "500",
+                            marginBottom: "0.4rem",
+                            fontWeight: "600",
+                            color: "#374151",
+                            fontSize: "14px",
                         }}
                     >
                         Email
@@ -277,9 +176,21 @@ export default function Register() {
                         placeholder="example@gmail.com"
                         style={{
                             width: "100%",
-                            padding: "0.75rem",
-                            borderRadius: "4px",
+                            padding: "0.75rem 0.9rem",
+                            borderRadius: "8px",
                             border: "1px solid #d1d5db",
+                            fontSize: "14px",
+                            outline: "none",
+                            boxSizing: "border-box",
+                            transition: "all 0.2s ease",
+                        }}
+                        onFocus={(e) => {
+                            e.target.style.borderColor = "#059669";
+                            e.target.style.boxShadow = "0 0 0 3px rgba(5, 150, 105, 0.15)";
+                        }}
+                        onBlur={(e) => {
+                            e.target.style.borderColor = "#d1d5db";
+                            e.target.style.boxShadow = "none";
                         }}
                     />
                 </div>
@@ -289,8 +200,10 @@ export default function Register() {
                     <label
                         style={{
                             display: "block",
-                            marginBottom: "0.5rem",
-                            fontWeight: "500",
+                            marginBottom: "0.4rem",
+                            fontWeight: "600",
+                            color: "#374151",
+                            fontSize: "14px",
                         }}
                     >
                         Mật khẩu
@@ -303,56 +216,65 @@ export default function Register() {
                         placeholder="••••••••"
                         style={{
                             width: "100%",
-                            padding: "0.75rem",
-                            borderRadius: "4px",
+                            padding: "0.75rem 0.9rem",
+                            borderRadius: "8px",
                             border: "1px solid #d1d5db",
+                            fontSize: "14px",
+                            outline: "none",
+                            boxSizing: "border-box",
+                            transition: "all 0.2s ease",
+                        }}
+                        onFocus={(e) => {
+                            e.target.style.borderColor = "#059669";
+                            e.target.style.boxShadow = "0 0 0 3px rgba(5, 150, 105, 0.15)";
+                        }}
+                        onBlur={(e) => {
+                            e.target.style.borderColor = "#d1d5db";
+                            e.target.style.boxShadow = "none";
                         }}
                     />
-                    {/**
-                     * Gợi ý yêu cầu mật khẩu
-                     * Hiển thị ngay dưới input password để user biết trước khi nhập.
-                     * Firebase yêu cầu tối thiểu 6 ký tự.
-                     */}
                     <p
                         style={{
                             fontSize: "12px",
-                            color: "#9ca3af",
-                            marginTop: "0.25rem",
+                            color: "#6b7280",
+                            marginTop: "0.3rem",
                         }}
                     >
-                        Mật khẩu phải có ít nhất 6 ký tự
+                        Tối thiểu 6 ký tự
                     </p>
                 </div>
 
-                {/* Nút Đăng Ký (email/password) */}
+                {/* Nút Đăng Ký (Xanh Lá) */}
                 <button
                     type="submit"
                     disabled={isSubmitting}
                     style={{
                         width: "100%",
                         padding: "0.75rem",
-                        backgroundColor: "#4F46E5",
+                        backgroundColor: "#059669",
                         color: "#fff",
                         border: "none",
-                        borderRadius: "4px",
-                        fontWeight: "bold",
+                        borderRadius: "8px",
+                        fontWeight: "600",
+                        fontSize: "15px",
                         cursor: isSubmitting ? "not-allowed" : "pointer",
                         opacity: isSubmitting ? 0.7 : 1,
-                        marginTop: "1rem",
+                        marginTop: "0.5rem",
+                        boxShadow: "0 4px 6px -1px rgba(5, 150, 105, 0.2)",
+                        transition: "all 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                        if (!isSubmitting) e.target.style.backgroundColor = "#047857";
+                    }}
+                    onMouseLeave={(e) => {
+                        if (!isSubmitting) e.target.style.backgroundColor = "#059669";
                     }}
                 >
-                    {isSubmitting ? "Đang xử lý..." : "Đăng Ký"}
+                    {isSubmitting ? "Đang tạo tài khoản..." : "Đăng Ký Tài Khoản"}
                 </button>
             </form>
 
-            {/**
-             * ══════════════════════════════════════════
-             * DIVIDER - Phân cách giữa 2 phương thức đăng ký
-             * ══════════════════════════════════════════
-             *
-             * Pattern phổ biến: "───── hoặc ─────"
-             * Giúp user nhận biết có 2 cách đăng ký khác nhau.
-             */}
+            {/* DIVIDER */}
             <div
                 style={{
                     display: "flex",
@@ -361,44 +283,14 @@ export default function Register() {
                     gap: "0.75rem",
                 }}
             >
-                <hr
-                    style={{
-                        flex: 1,
-                        border: "none",
-                        borderTop: "1px solid #d1d5db",
-                    }}
-                />
-                <span
-                    style={{
-                        color: "#9ca3af",
-                        fontSize: "13px",
-                        fontWeight: "500",
-                    }}
-                >
+                <hr style={{ flex: 1, border: "none", borderTop: "1px solid #e5e7eb" }} />
+                <span style={{ color: "#9ca3af", fontSize: "13px", fontWeight: "500" }}>
                     hoặc
                 </span>
-                <hr
-                    style={{
-                        flex: 1,
-                        border: "none",
-                        borderTop: "1px solid #d1d5db",
-                    }}
-                />
+                <hr style={{ flex: 1, border: "none", borderTop: "1px solid #e5e7eb" }} />
             </div>
 
-            {/**
-             * ══════════════════════════════════════════
-             * NÚT ĐĂNG KÝ BẰNG GOOGLE
-             * ══════════════════════════════════════════
-             *
-             * Nằm NGOÀI thẻ <form> → type="button" (không trigger submit).
-             * onClick → handleGoogleRegister() → loginWithGoogle()
-             *
-             * Firebase signInWithPopup() tự xử lý:
-             *   - Nếu Google email chưa có → Tạo account mới
-             *   - Nếu Google email đã có  → Đăng nhập luôn
-             *   → User không cần phân biệt "đăng ký" hay "đăng nhập" bằng Google
-             */}
+            {/* NÚT ĐĂNG KÝ BẰNG GOOGLE */}
             <button
                 type="button"
                 onClick={handleGoogleRegister}
@@ -408,17 +300,17 @@ export default function Register() {
                     padding: "0.75rem",
                     backgroundColor: "#fff",
                     color: "#374151",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "4px",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "8px",
                     fontWeight: "600",
                     cursor: isGoogleLoading ? "not-allowed" : "pointer",
                     opacity: isGoogleLoading ? 0.7 : 1,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: "0.5rem",
+                    gap: "0.6rem",
                     fontSize: "14px",
-                    transition: "background-color 0.2s ease",
+                    transition: "all 0.2s ease",
                 }}
                 onMouseEnter={(e) => {
                     if (!isGoogleLoading) e.target.style.backgroundColor = "#f9fafb";
@@ -427,7 +319,6 @@ export default function Register() {
                     e.target.style.backgroundColor = "#fff";
                 }}
             >
-                {/* Google Logo SVG - 4 màu chính thức (xanh dương, xanh lá, vàng, đỏ) */}
                 <svg width="18" height="18" viewBox="0 0 24 24">
                     <path
                         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
@@ -446,8 +337,7 @@ export default function Register() {
                         fill="#EA4335"
                     />
                 </svg>
-                {/* Text nút - thay đổi theo trạng thái loading */}
-                {isGoogleLoading ? "Đang xử lý..." : "Đăng ký bằng Google"}
+                {isGoogleLoading ? "Đang kết nối Google..." : "Đăng ký bằng Google"}
             </button>
 
             {/* Link chuyển sang trang Login */}
@@ -456,12 +346,17 @@ export default function Register() {
                     marginTop: "1.5rem",
                     textAlign: "center",
                     fontSize: "14px",
+                    color: "#4b5563",
                 }}
             >
                 Đã có tài khoản?{" "}
                 <Link
                     to="/login"
-                    style={{ color: "#4F46E5", textDecoration: "none" }}
+                    style={{
+                        color: "#059669",
+                        fontWeight: "600",
+                        textDecoration: "none",
+                    }}
                 >
                     Đăng nhập ngay
                 </Link>
